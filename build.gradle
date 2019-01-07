@@ -1,7 +1,9 @@
-apply from: 'config/keystore.gradle'
-
 buildscript {
     repositories {
+        maven { url 'http://art.mobimate.local/artifactory/libs-releases' }
+
+        // required for ./gradlw install to create a local maven repo (~/.m2/...)
+        mavenLocal()
         jcenter()
         google()
     }
@@ -10,14 +12,81 @@ buildscript {
         classpath 'com.github.dcendents:android-maven-gradle-plugin:2.1'
         classpath 'com.jfrog.bintray.gradle:gradle-bintray-plugin:1.8.0'
         classpath 'org.ajoberstar:gradle-git:1.7.2'
+        classpath "org.jfrog.buildinfo:build-info-extractor-gradle:latest.release"
     }
 }
+plugins {
+    // This plugin allows publishing android libraries
+    id "com.github.dcendents.android-maven" version "2.0"
+}
 
-subprojects {
+apply from: 'config/keystore.gradle'
+
+allprojects {
+    apply plugin: 'com.jfrog.artifactory'
+    apply plugin: 'maven-publish'
     repositories {
         google()
         jcenter()
         maven { url 'https://jitpack.io' }
+    }
+}
+
+artifactoryPublish.skip = true
+
+project('app') {
+    artifactoryPublish.dependsOn('build')
+    publishing {
+        publications {
+            app(MavenPublication) {
+                groupId = group
+                artifactId = project.getName()
+                version = 2
+
+                artifact("$buildDir/outputs/apk/release/app-release-unsigned.apk")
+            }
+        }
+    }
+
+    artifactoryPublish {
+        publications(publishing.publications.app)
+    }
+}
+
+/**
+ * To generate and deploy the artifact - run these commands:
+ * export artifactory_user="your user name to the local jfrog artifactory"
+ * export artifactory_password="your password"
+ * ./gradlew clean assembleRelease artifactoryPublish
+ *
+ * usage: In android project build.gradle add
+ * buildscript {
+ *  repositories {
+ *         maven { url 'http://art.mobimate.local/artifactory/libs-release-local' }
+ *  }
+ * }
+ *
+ * and:
+ *
+ * implementation 'digital-android-libraries:cwt-appauth:0.7.1.2'
+ *
+ */
+project('library') {
+    artifactoryPublish.dependsOn('build')
+    publishing {
+        publications {
+            aar(MavenPublication) {
+                groupId 'digital-android-libraries'
+                artifactId 'cwt-appauth'
+                version = "0.7.1.2"
+                // Tell maven to prepare the generated "*.aar" file for publishing
+                artifact("$buildDir/outputs/aar/cwt-appauth-release.aar")
+            }
+        }
+    }
+
+    artifactoryPublish {
+        publications(publishing.publications.aar)
     }
 }
 
